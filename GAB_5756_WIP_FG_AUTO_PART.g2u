@@ -1,0 +1,92 @@
+Program.Sub.Preflight.Start
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+f.Intrinsic.Control.Try
+	'000009 - PART#
+	'000010 - LOCATION
+	'000013 - QUANTITY
+	'000003 - WO#
+	'000004 - SUFFIX
+	f.ODBC.Connection!con.opencompanyconnection(60)
+	v.Local.ssql.Declare
+	v.Local.sret.Declare
+	v.Local.spart.Declare
+	v.Local.sloc.Declare
+	v.Local.sUM.Declare
+	v.Local.sDesc.Declare
+	v.Local.sPL.Declare
+	v.Local.sSource.Declare
+	v.Local.sAlt.Declare
+	v.Local.sAlt2.Declare
+	v.Local.sLot.Declare
+	v.Local.sSerials.Declare
+	v.Local.fPrice.Declare
+	v.Local.fQty.Declare
+	
+	v.Local.spart.set(v.Passed.000009)
+	v.Local.sloc.Set(v.Passed.000010)
+	f.Intrinsic.String.Format(v.Ambient.Date,"YYYYMMDD",v.Local.sLot)
+	f.Intrinsic.String.Build("SELECT USER2 FROM GAB_4912_USER_FIELDS WHERE PART='{0}' AND LOCATION='{1}'",v.Local.spart,v.Local.sloc,v.Local.ssql)
+	f.ODBC.Connection!con.executeandreturn(v.Local.ssql,v.Local.sret)
+	f.Intrinsic.Control.If(v.Local.sret.Trim,=,"Y")
+		'''''''''''''
+		'CREATE PART'
+		'''''''''''''
+		f.Intrinsic.String.Build("SELECT PART, LOCATION, PRODUCT_LINE, DESCRIPTION, UM_INVENTORY, AMT_PRICE, CODE_SOURCE, DESCRIPTION_2, DESCRIPTION_3,FLAG_LOT  from V_INVENTORY_ALL WHERE PART='{0}'",v.Local.spart,v.Local.ssql)
+		f.ODBC.Connection!con.executeandreturn(v.Local.ssql,v.Local.sret)
+		f.Intrinsic.String.Split(v.Local.sret,"*!*",v.Local.sret)
+		V.Local.sDesc.Set(v.Local.sret(3))
+		v.Local.sPL.Set(v.Local.sret(2))
+		v.Local.sSource.Set(v.Local.sret(6))
+		v.Local.sAlt.Set(v.Local.sret(7))
+		v.Local.sAlt2.Set(v.Local.sret(8))
+		v.Local.fPrice.Set(v.Local.sret(5))
+		v.Local.sloc.Set(v.Local.sret(9))
+		f.Global.Inventory.CreatePart(v.Local.sPart,v.Local.sUM,v.Local.sDesc,"AS",v.Local.sPL,v.Local.sSource,v.Local.sAlt,v.Local.sAlt2,v.Local.fPrice)
+		F.Intrinsic.Control.CallSub(UploadInv,"Part",v.Local.sPart,"Lot",v.Local.sLot)
+	f.Intrinsic.Control.Else
+		f.Intrinsic.Control.CallSub(unload)
+	f.Intrinsic.Control.EndIf
+f.Intrinsic.Control.Catch
+	f.Intrinsic.UI.Msgbox(v.Ambient.ErrorDescription)
+	f.ODBC.Connection!con.Close
+	f.Intrinsic.Control.End
+f.Intrinsic.Control.endtry
+Program.Sub.Main.End
+
+Program.Sub.UploadInv.Start
+f.Intrinsic.Control.Try
+	v.Local.sLines.Declare
+	v.Local.sSql.Declare
+	v.Local.spath.Declare
+	v.Local.i.Declare
+	
+	'''''''''''''''''''''
+	'GRAB THE ITEM MASTER
+	'''''''''''''''''''''
+	f.Intrinsic.String.Concat("TRANS ID,PART,LOCATION,ONHAND,BIN,LOT,HEAT,SERIAL,REFERENCE",v.Ambient.NewLine,v.Local.slines)
+	f.Intrinsic.String.Build("select PART, LOT, BIN, HEAT, SERIAL_NUMBER, QUANTITY from V_ITEM_MASTER WHERE PART='{0}' AND LOT='{1}'",v.Args.part,v.Args.lot,v.Local.ssql)
+	f.Data.DataTable.CreateFromSQL("dt","con",v.Local.ssql)
+	f.Intrinsic.Control.For(v.Local.i,0,v.DataTable.dt.RowCount--,1)
+		f.Intrinsic.String.Concat(v.Local.sLines,"P16,",v.ARGS.part,",AS,",v.DataTable.dt(v.Local.i).QUANTITY!FIELDVAL,",",v.DataTable.dt(v.Local.i).BIN!FIELDVALTRIM,",",v.DataTable.dt(v.Local.i).Lot!fieldvaltrim,",",V.DataTable.dt(v.Local.i).Heat!fieldvaltrim,",",v.DataTable.dt(v.Local.i).Serial_NUMBER!fieldvaltrim,",",v.Ambient.NewLine,v.Local.sLines)
+	f.Intrinsic.Control.Next(v.Local.i)
+	
+	'''''''''''''''''''''''''''''''
+	'FORMAT THE ITEM MASTER, UPLOAD
+	'''''''''''''''''''''''''''''''
+	F.Intrinsic.String.Concat(v.Caller.FilesDir,"\BARINV.txt",v.Local.spath)
+	f.Intrinsic.File.String2File(v.Local.spath,v.Local.sLines)
+	f.Global.General.CallWrapperSync(50,"INV516UL/NF")
+	
+f.Intrinsic.Control.Catch
+	f.Intrinsic.UI.Msgbox(v.Ambient.ErrorDescription)
+	f.ODBC.Connection!con.Close
+	f.Intrinsic.Control.End
+f.Intrinsic.Control.EndTry
+Program.Sub.UploadInv.End
+
+Program.Sub.unload.Start
+f.ODBC.Connection!con.Close
+f.Intrinsic.Control.End
+program.Sub.unload.End
